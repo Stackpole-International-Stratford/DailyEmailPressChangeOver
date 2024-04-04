@@ -37,6 +37,28 @@ db_config = {
     'raise_on_warnings': True
 }
 
+def basic_query(start,end):
+    result = []
+    cnx = mysql.connector.connect(**db_config)
+    cursor = cnx.cursor()
+
+    query = ("SELECT * FROM pr_downtime1 "
+             "WHERE priority = -2 "
+             "AND ( changeovertime BETWEEN %s AND %s)")
+
+    cursor.execute(query,(start, end))
+
+    for row in cursor:
+        record = {
+            'machine': row[0],
+            'problem': row[1],
+            'changeovertime': row[15],
+        } 
+
+        result.append(record)
+    return result
+
+
 def shift_times(date, date_offset=0):
     # end_date is today at {start_hour}
     end_date = date.replace(hour=7, minute=0, second=0, microsecond=0)
@@ -47,8 +69,17 @@ def shift_times(date, date_offset=0):
     end_date = end_date - timedelta(seconds=1)
     return start_date, end_date
 
-def report_html(start, end):
+
+def get_report_data(start, end):
     data = {}
+
+
+    return data
+
+
+
+def report_html(start, end):
+    data = get_report_data(start, end)
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath=''))
     template = env.get_template('template.html')
     return template.render(data=data)
