@@ -12,18 +12,14 @@
 </head>
 <body>
 
-<h1>AB1V Autogauge Production vs Scrap</h1>
+<h1>List of completed changeovers in the last 24 hours</h1>
 <h3>{{ start }} to {{ end }}</h3><table>
-    <tr><th>Part</th><th>Good</th><th>Rejects</th></tr>
-{%- for part in data -%}
+    <tr><th>Asset</th><th>Problem</th><th>Completed</th></tr>
+{%- for row in data -%}
 <tr>
-    <td>{{ part['part_number'] }}</td>
-    <td>{{ part['good']}}</td>
-    {%- for key, value in part['reject'].items() -%}
-        {%- if value['count'] > 0 -%}
-            <td>{{value['label']}}:{{value['count']}}</td>
-        {%- endif -%}
-    {%- endfor -%}
+    <td>{{ row['machine'] }}</td>
+    <td>{{ row['problem']}}</td>
+    <td>{{ row['changeovertime']}}</td>
 </tr>
 {%- endfor -%}
 </table>
