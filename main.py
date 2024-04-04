@@ -12,25 +12,18 @@ import os
 from dotenv import load_dotenv
 from loguru import logger
 
+# set the start hour for the report.  6 = six am yesterday to six am today
+start_hour = 6
+
 load_dotenv()
 
 logger.debug("Running")
 
 email_config = {
     'server': 'smtp01.stackpole.ca',
-    'from': 'cstrutton@stackpole.com',
+    'from': 'chris.strutton@johnsonelectric.com',
     'to': [
-        'dclark@stackpole.com',
-        'dbrenneman@stackpole.com',
-        'rzylstra@stackpole.com',
-        'dmilne@stackpole.com',
-        'lbaker@stackpole.com',
-        'gperrier@stackpole.com',
-        'PRajapandi@stackpole.com',
-        'Christian Forero <cforero@stackpole.com>',
-        'Pawel Mlynarski <pawel.mlynarski@johnsonelectric.com>',
-        'Preet Panchal <ppanchal@stackpole.com>',
-        'cstrutton@stackpole.com',
+        'chris.strutton@johnsonelectric.com',
     ],
     'subject': 'AB1V Autogauge scrap report'
 }
@@ -44,196 +37,21 @@ db_config = {
     'raise_on_warnings': True
 }
 
-
-def get_part_list(range_start, range_end=None):
-    if not range_end:
-        range_end = range_start + timedelta(hours=24)
-    cnx = mysql.connector.connect(**db_config)
-    cursor = cnx.cursor()
-
-    query = ("SELECT DISTINCT part_number FROM 1730_Vantage "
-             "WHERE created_at BETWEEN %s AND %s")
-
-    cursor.execute(query, (range_start, range_end))
-    parts = []
-    for row in cursor:
-        # print(row[0])
-        parts.append(row[0])
-
-    cursor.close()
-    cnx.close()
-    return parts
-
-
-def good_part_count(part_number, start_date, end_date):
-    if not end_date:
-        end_date = start_date + timedelta(hours=24)
-    cnx = mysql.connector.connect(**db_config)
-    cursor = cnx.cursor()
-
-    query = ("SELECT COUNT(*) FROM 1730_Vantage "
-             "WHERE part_number = %s "
-             "AND part_fail = 1 "
-             "AND (created_at BETWEEN %s AND %s)")
-
-    cursor.execute(query, (part_number, start_date, end_date))
-    res = cursor.fetchone()
-
-    cursor.close()
-    cnx.close()
-
-    return res[0]
-
-
 def shift_times(date, date_offset=0):
-    # end_date is this morning at 7am
+    # end_date is today at {start_hour}
     end_date = date.replace(hour=7, minute=0, second=0, microsecond=0)
     # adjust end_date by date_offset days
     end_date = end_date - timedelta(days=date_offset)
-    # start_date is yesterday morning at 7am
+    # start_date is the day before at {start_hour}
     start_date = end_date - timedelta(hours=24)
     end_date = end_date - timedelta(seconds=1)
     return start_date, end_date
 
-
-def reject_part_count(part_number, start_date, end_date):
-    # initialize empty results object
-    results = {
-        'spotface': {'label': 'Spot Face', 'count': 0},
-        'media': {'label': 'Media', 'count': 0},
-        'oilholes': {'label': 'Oil Holes', 'count': 0},
-        'induction': {'label': 'Induction', 'count': 0},
-        'balpos': {'label': 'Balance Pos', 'count': 0},
-        'balwitness': {'label': 'Bal Witness Mark', 'count': 0},
-        'winheight': {'label': 'Window Height', 'count': 0},
-        'staking': {'label': 'Staking Pocket', 'count': 0},
-        'pocketholes': {'label': 'Mach Pocket Holes', 'count': 0},
-        'eddy': {'label': 'Eddy Current', 'count': 0},
-        'res': {'label': 'Resonance', 'count': 0},
-        'plateph': {'label': 'Plate PH', 'count': 0},
-        'pedph': {'label': 'Ped PH', 'count': 0},
-        'bushid': {'label': 'Bush ID', 'count': 0},
-        'upid': {'label': 'Upper ID', 'count': 0},
-        'lowerid': {'label': 'Lower ID', 'count': 0},
-        'psph': ('label': 'PSPH OK', 'count': 0},
-        'other': {'label': 'Other', 'count': 0}
-    }
-
-    cnx = mysql.connector.connect(**db_config)
-    cursor = cnx.cursor()
-
-    query = ("SELECT inspection_data FROM 1730_Vantage "
-             "WHERE part_number = %s "
-             "AND part_fail = 2 "
-             "AND (created_at BETWEEN %s AND %s)")
-
-    cursor.execute(query, (part_number, start_date, end_date))
-
-    for row in cursor:
-        features = re.split(r'\t+', row[0])
-        try:
-            failure = features.index("FAIL")
-        except ValueError:
-            failure = -1
-
-        # 5 - Media presence- Braze pellet holes
-        if failure == 5:
-            results['media']['count'] += 1
-        # 6 - Lube holes
-        elif failure == 6:
-            results['oilholes']['count'] += 1
-        # 7 - Media presence- Pellet holes
-        elif failure == 7:
-            results['media']['count'] += 1
-        # 8 - Spot face check
-        elif failure == 8:
-            results['spotface']['count'] += 1
-        # 9 - Pinion crosshole presence
-        elif failure == 9:
-            results['oilholes']['count'] += 1
-        # 10 - Induction hardening presence
-        elif failure == 10:
-            results['induction']['count'] += 1
-        # 11 - Balance hole position
-        elif failure == 11:
-            results['balpos']['count'] += 1
-        # 12 - Media presence bal hole
-        elif failure == 12:
-            results['media']['count'] += 1
-        # 13 - Witness mark
-        elif failure == 13:
-            results['balwitness']['count'] += 1
-        # 14 - Media presence pinion holes
-        # 15 - Media presence web slot
-        # 16 - Media presence windows
-        # 17 - Media presence Machined Recess plate side
-        # 18 - Media presence blind ped. Holes
-        # 19 - Media presence slot at pinion hole
-        # 20 - Media presence blind pellet holes
-        elif 14 <= failure <= 20:
-            results['media']['count'] += 1
-        # 21 - 30: actual window min/max measurements
-        # 31 - new window height 'status'
-        elif failure == 31:
-            results['winheight']['count'] += 1
-        # 32: Place Holder
-        # 33: Plate side Pinion Holes OK???
-        elif failure == 33:
-            results['psph']['count'] += 1
-        # 34 - Staking pocket presence
-        elif failure == 34:
-            results['staking']['count'] += 1
-        # 35 - Media presence Machined recess pedestal side
-        elif failure == 35:
-            results['media']['count'] += 1
-        # 36 - Pedestal side Machined pocket holes
-        elif failure == 36:
-            results['pocketholes']['count'] += 1
-        # 37 - Eddy Current Result
-        elif failure == 37:
-           results['eddy']['count'] += 1
-        # 38 - Resonance Result
-        elif failure == 38:
-            results['res']['count'] += 1
-        # 39-48 Plate Pinion Hole Status x5
-        elif 39 <= failure <= 48:
-            results['plateph']['count'] += 1
-        # 49-58 Plate Pinion Hole Status x5
-        elif 49 <= failure <= 58:
-            results['pedph']['count'] += 1
-        # 59 - 60: Bushing ID status
-        elif 59 <= failure <= 60:
-            results['bushid']['count'] += 1
-        # 61 - 62: Upper ID status
-        elif 61 <= failure <= 62:
-        elif failure == 62:
-            results['upid']['count'] += 1
-        # 63 - 64: Lower ID status
-        elif 63 <= failure <= 64:
-        elif failure == 64:
-            results['lowerid']['count'] += 1
-        else:
-            results['other']['count'] += 1
-
-    cursor.close()
-    cnx.close()
-
-    return results
-
-
 def report_html(start, end):
-    data = []
-    part_list = get_part_list(start, end)
-    for part in part_list:
-        data.append({
-            'part_number': part,
-            'good': good_part_count(part, start, end),
-            'reject': reject_part_count(part, start, end)
-        })
+    data = {}
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath=''))
     template = env.get_template('template.html')
-    return template.render(data=data, start=start, end=end)
-
+    return template.render(data=data)
 
 @logger.catch
 def main():
@@ -249,7 +67,6 @@ def main():
     server = smtplib.SMTP(email_config['server'])
     server.sendmail(email_config['from'], email_config['to'], message.as_string())
     server.quit()
-
 
 if __name__ == '__main__':
     main()
