@@ -24,8 +24,12 @@ email_config = {
     'from': 'chris.strutton@johnsonelectric.com',
     'to': [
         'chris.strutton@johnsonelectric.com',
+        'kevin.baker@johnsonelectric.com',
+        'Adam Trachsel <adam.trachsel@johnsonelectric.com>',
+        'dave.clark@johnsonelectric.com',
+        'ron.charlton@johnsonelectric.com'
     ],
-    'subject': 'AB1V Autogauge scrap report'
+    'subject': 'Press Changeovers'
 }
 
 db_config = {
@@ -33,35 +37,63 @@ db_config = {
     'password': os.getenv('DB_PASSWORD'),
     'host': os.getenv('DB_HOST'),
     'port': os.getenv('DB_PORT'),
-    'database': 'prod_mon',
-    'raise_on_warnings': True
+    'database': 'prodrptdb',
+    # 'raise_on_warnings': True
 }
 
-def basic_query(start,end):
-    result = []
-    cnx = mysql.connector.connect(**db_config)
-    cursor = cnx.cursor()
+def completed_changeovers(start,end):
+    results = []
+    with mysql.connector.connect(**db_config) as cnx:
+        cursor = cnx.cursor()
 
-    query = ("SELECT * FROM pr_downtime1 "
-             "WHERE priority = -2 "
-             "AND ( changeovertime BETWEEN %s AND %s)")
+        query = ("SELECT * FROM pr_downtime1 "
+                "WHERE priority = -2 "
+                "AND ( completedtime BETWEEN %s AND %s)")
 
-    cursor.execute(query,(start, end))
+        cursor.execute(query,(start, end))
 
-    for row in cursor:
-        record = {
-            'machine': row[0],
-            'problem': row[1],
-            'changeovertime': row[15],
-        } 
+        for row in cursor:
+            record = {
+                'machine': row[0],
+                'problem': row[1],
+                'comments': row[8],
+                'updatedtime': row[10],
+                'completedtime': row[7],
+                'changeovertime': row[15],
+                'setupdelta': row[15]-row[10],
+                'dialindelta': row[7]-row[15],
+            } 
 
-        result.append(record)
-    return result
+            results.append(record)
+            # print(results)
+    return results
+
+def pending_changeovers(start,end):
+    results = []
+    with mysql.connector.connect(**db_config) as cnx:
+        cursor = cnx.cursor()
+
+        query  = f'SELECT * FROM pr_downtime1 '
+        query += f'WHERE priority = -1;'
+
+        cursor.execute(query)
+
+        for row in cursor:
+            print(row)
+            record = {
+                'machine': row[0],
+                'problem': row[1],
+                'called4helptime': row[2],
+            } 
+
+            results.append(record)
+            # print(results)
+    return results
 
 
 def shift_times(date, date_offset=0):
     # end_date is today at {start_hour}
-    end_date = date.replace(hour=7, minute=0, second=0, microsecond=0)
+    end_date = date.replace(hour=start_hour, minute=0, second=0, microsecond=0)
     # adjust end_date by date_offset days
     end_date = end_date - timedelta(days=date_offset)
     # start_date is the day before at {start_hour}
@@ -71,16 +103,27 @@ def shift_times(date, date_offset=0):
 
 
 def get_report_data(start, end):
-    data = {}
 
-
+    pending_list = pending_changeovers(start, end)
+    completed_list = completed_changeovers(start, end)
+    data = {
+        'start': start,
+        'end': end,
+        'completed_list': completed_list,
+        'pending_list': pending_list,
+    }
+    # print(data)
     return data
 
 
 
 def report_html(start, end):
     data = get_report_data(start, end)
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath=''))
+    # print(data)
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(searchpath=''),
+        extensions=["jinja2_humanize_extension.HumanizeExtension"]
+        )
     template = env.get_template('template.html')
     return template.render(data=data)
 
