@@ -21,13 +21,9 @@ logger.debug("Running")
 
 email_config = {
     'server': 'smtp01.stackpole.ca',
-    'from': 'chris.strutton@johnsonelectric.com',
+    'from': 'tyler.careless@johnsonelectric.com',
     'to': [
-        'chris.strutton@johnsonelectric.com',
-        'kevin.baker@johnsonelectric.com',
-        'Adam Trachsel <adam.trachsel@johnsonelectric.com>',
-        'dave.clark@johnsonelectric.com',
-        'ron.charlton@johnsonelectric.com'
+        'tyler.careless@johnsonelectric.com',
     ],
     'subject': 'Press Changeovers'
 }
